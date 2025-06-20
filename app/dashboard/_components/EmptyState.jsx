@@ -5,17 +5,28 @@ import React from 'react'
 
 function EmptyState() {
   return (
-    <div className='flex items-center justify-center mt-10 flex-col'>
-        <Image src={'/placeholder.png'}
-        width={200} height={200} alt='placeholder'
-        />
-        <h2 className='font-medium text-lg text-gray-500'>Create New AI Interior Design for your Room 🏢</h2>
-        <Link href={'/dashboard/create-new'}>
-          <Button className='mt-5'>+ Redesign Room 🏫</Button>
-        </Link>
-
+    <div className="flex flex-col items-center justify-center mt-10">
+      <Image
+        src="/placeholder.png"
+        width={200}
+        height={200}
+        alt="Empty state illustration for AI interior design"
+      />
+      <div className="text-center mt-4">
+        <h2 className="font-medium text-lg text-gray-600">
+          Create a New AI Interior Design for Your Room 🏢
+        </h2>
+        <p className="text-gray-500 text-sm mt-2">
+          Start designing now and visualize your dream space!
+        </p>
+      </div>
+      <Link href="/dashboard/create-new">
+        <Button className="mt-5 transition-all hover:scale-105">
+          + Redesign Room 🏫
+        </Button>
+      </Link>
     </div>
   )
 }
 
-export default EmptyState
+export default EmptyState;

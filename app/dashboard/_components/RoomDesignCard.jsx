@@ -31,4 +31,4 @@ function RoomDesignCard({room}) {
   )
 }
 
-export default RoomDesignCard
+export default RoomDesignCard;

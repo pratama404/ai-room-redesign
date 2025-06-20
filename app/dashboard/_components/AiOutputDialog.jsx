@@ -37,4 +37,4 @@ function AiOutputDialog({openDialog,closeDialog,orgImage,aiImage}) {
   )
 }
 
-export default AiOutputDialog
+export default AiOutputDialog;

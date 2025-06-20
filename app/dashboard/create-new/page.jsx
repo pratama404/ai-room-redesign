@@ -34,54 +34,66 @@ function CreateNew() {
     console.log(formData);
   }
 
-  const GenerateAiImage=async()=>{
+  const GenerateAiImage = async () => {
     setLoading(true);
-    const rawImageUrl=await SaveRawImageToFirebase();
-    console.log('Image URL:', rawImageUrl);
-    const result=await axios.post('/api/redesign-room',formData,{
-      rawImageUrl:rawImageUrl,
-      roomType:formData?.roomType,
-      designType:formData?.designType,
-      additionalReq:formData?.additionalReq,
-      userEmail:user?.primaryEmailAddress?.emailAddress,
-    });
-    console.log(result.data);
-    await updateUserCredits();
-    setAiOutputImage(result.data.result); //output image url
-    setOpenOutputDialog(true);
-    
-    setLoading(false);
+    try {
+        const rawImageUrl = await SaveRawImageToFirebase();
+        console.log('Image URL:', rawImageUrl);
 
+        // Make sure to pass the correct form data directly in the request
+        const result = await axios.post('/api/redesign-room', {
+          imageUrl: rawImageUrl,  // Use 'imageUrl' to match your API route
+          roomType: formData.roomType,
+          designType: formData.designType,
+          additionalReq: formData.additionalReq,
+          userEmail: user?.primaryEmailAddress?.emailAddress,
+        });
+        
+        console.log(result.data);
+        
+        await updateUserCredits(); // make sure this function is uncommented and working
+        setAiOutputImage(result.data.result); // output image url
+        setOpenOutputDialog(true);
+
+    } catch (error) {
+        console.error('Error generating AI image:', error);
+    } finally {
+        setLoading(false);
+    }
+}
+
+const SaveRawImageToFirebase = async () => {
+  try {
+      const fileName = Date.now() + "_raw.png";
+      const imageRef = ref(storage, 'room-redesign/' + fileName);
+
+      await uploadBytes(imageRef, formData.image); // assuming formData.image holds the file
+      console.log('File Uploaded...');
+
+      const downloadUrl = await getDownloadURL(imageRef);
+      console.log(downloadUrl);
+      setOrgImage(downloadUrl);
+      return downloadUrl;
+
+  } catch (error) {
+      console.error('Error uploading file to Firebase:', error);
   }
-  const SaveRawImageToFirebase=async()=>{
-    //SaveRawImageToFirebase
-    const fileName=Date.now()+"_raw.png";
-    const imageRef=ref(storage,'room-redesign/'+fileName);
+}
 
-    await uploadBytes(imageRef,formData.image).then(resp=>{
-      console.log('File Uploaded...')
-    })
 
-    //uploaded File Image  URL
-    const downloadUrl=await getDownloadURL(imageRef);
-    console.log(downloadUrl);
-    setOrgImage(downloadUrl);
-    return downloadUrl;
-  }
-
-  // const updateUserCredits=async()=>{
-  //   const result=await db.update(Users).set({
-  //     credits:userDetail?.credits-1
-  //   }).returning({id:Users.id});
+  const updateUserCredits=async()=>{
+    const result=await db.update(Users).set({
+      credits:userDetail?.credits-1
+    }).returning({id:Users.id});
     
-  //   if(result){
-  //     setUserDetail(prev=>({
-  //       ...prev,
-  //       credits:userDetail?.credits-1
-  //     }))
-  //     return result[0].id
-  //   }
-  // }
+    if(result){
+      setUserDetail(prev=>({
+        ...prev,
+        credits:userDetail?.credits-1
+      }))
+      return result[0].id
+    }
+  }
 
 
   return (
