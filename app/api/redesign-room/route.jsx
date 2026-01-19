@@ -1,96 +1,99 @@
-import axios from 'axios';
-import { db } from "@/config/db";  // Database configuration
-import { storage } from "@/config/firebaseConfig";  // Firebase configuration
-import { AiGeneratedImage } from "@/config/schema";  // Schema for the database
+import { db } from "@/config/db";
+import { storage } from "@/config/firebaseConfig";
+import { AiGeneratedImage } from "@/config/schema";
 import { getDownloadURL, ref, uploadString } from "firebase/storage";
+import axios from 'axios';
+import { HfInference } from "@huggingface/inference";
 
-// Function to generate AI image
-async function generateAIImage(imageUrl, roomType, designType, additionalReq) {
+const hf = new HfInference(process.env.HUGGINGFACE_API_TOKEN);
+
+async function generateAIImage(imageUrl, roomType, designType, additionalReq, conditionScale) {
     try {
-        if (!imageUrl || !roomType || !designType || !additionalReq) {
-            throw new Error("Missing required fields.");
+        if (!process.env.HUGGINGFACE_API_TOKEN) {
+            throw new Error("Missing HUGGINGFACE_API_TOKEN in environment variables.");
         }
 
-        const input = {
-            image: imageUrl,
-            prompt: `A ${roomType} with a ${designType} style interior ${additionalReq}`
-        };
+        // 1. Fetch the image as ArrayBuffer
+        const imageResponse = await axios.get(imageUrl, { responseType: 'arraybuffer' });
+        // const imageBlob = new Blob([imageResponse.data]); // Blob can be flaky in some Node envs, passing buffer directly if supported
 
-        const response = await axios.post(
-            "https://api.replicate.com/v1/predictions", 
-            {
-                version: "76604baddc85b1b4616e1c6475eca080da339c8875bd4996705440484a6eac38", // Model version
-                input: input,
-            },
-            {
-                headers: {
-                    'Authorization': `Bearer ${process.env.REPLICATE_API_TOKEN}`, // API Token for Replicate
-                    'Content-Type': 'application/json',
-                    'Prefer': 'wait',
-                }
+        const prompt = `Create a cinematic, photorealistic medium shot. The focus is a ${roomType} with ${designType} style interior. ${additionalReq || ''}. The lighting is soft, golden hour sunlight. Natural film grain, warm color palette, sharp focus.`;
+
+        // Calculate strength (Denoising Strength for Img2Img)
+        const strength = 1.0 - (conditionScale || 0.5);
+        const clampedStrength = Math.max(0.1, Math.min(0.9, strength));
+
+        console.log("Sending to Hugging Face (SD v1.5)...");
+
+        // Use SD v1.5 as it's lighter and more reliable on free tier than SDXL
+        const resultBlob = await hf.imageToImage({
+            model: 'runwayml/stable-diffusion-v1-5',
+            inputs: imageResponse.data, // Passing ArrayBuffer directly
+            parameters: {
+                prompt: prompt,
+                negative_prompt: "blurry, low quality, distorted, ugly, bad anatomy",
+                strength: clampedStrength,
             }
-        );
+        });
 
-        if (!response.data || !response.data.output) {
-            throw new Error("AI generation failed.");
-        }
+        // Convert the resulting Blob to a Base64 string
+        const buffer = Buffer.from(await resultBlob.arrayBuffer());
+        const base64String = "data:image/png;base64," + buffer.toString('base64');
 
-        return response.data;
+        return { output: base64String };
+
     } catch (error) {
-        console.error("Error during API call:", error.message);
+        console.error("Error generating AI image (HF):", error);
         throw error;
     }
 }
 
-// Function to convert image URL to base64
-async function ConvertImageToBase64(imageUrl) {
-    const resp = await axios.get(imageUrl, { responseType: 'arraybuffer' });
-    const base64ImageRaw = Buffer.from(resp.data).toString('base64');
-    return `data:image/png;base64,${base64ImageRaw}`;
-}
-
-// Function to upload image to Firebase and get the URL
-async function uploadImageToFirebase(base64Image) {
-    const fileName = `${Date.now()}.png`;
-    const storageRef = ref(storage, `room-redesign/${fileName}`);
-    await uploadString(storageRef, base64Image, 'data_url');
-    return await getDownloadURL(storageRef);
-}
-
-// Function to save to the database
-async function saveToDatabase(roomType, designType, imageUrl, aiImageUrl, userEmail) {
-    return await db.insert(AiGeneratedImage).values({
-        roomType: roomType,
-        designType: designType,
-        orgImage: imageUrl,
-        aiImage: aiImageUrl,
-        userEmail: userEmail
-    }).returning({ id: AiGeneratedImage.id });
-}
-
-// Exported POST method for the API route
 export async function POST(req) {
     try {
-        const { imageUrl, roomType, designType, additionalReq, userEmail } = await req.json();
+        const { imageUrl, roomType, designType, additionalReq, userEmail, condition_scale } = await req.json();
 
-        if (!imageUrl || !roomType || !designType || !additionalReq || !userEmail) {
+        if (!imageUrl || !roomType || !designType || !userEmail) {
             return new Response(JSON.stringify({ error: "Missing required fields." }), { status: 400 });
         }
 
-        // Generate AI Image
-        const aiResponse = await generateAIImage(imageUrl, roomType, designType, additionalReq);
+        const aiResponse = await generateAIImage(imageUrl, roomType, designType, additionalReq, condition_scale);
 
-        // Convert the result to base64 and upload to Firebase
-        const base64Image = await ConvertImageToBase64(aiResponse.output);
+        // Ensure we got a valid output
+        if (!aiResponse.output) {
+            throw new Error("No output received from AI model.");
+        }
+
+        // HF returns base64 directly, so we use it as is.
+        const base64Image = aiResponse.output;
+
         const downloadUrl = await uploadImageToFirebase(base64Image);
-
-        // Save to database
         const dbResult = await saveToDatabase(roomType, designType, imageUrl, downloadUrl, userEmail);
 
-        // Return response with download URL
         return new Response(JSON.stringify({ result: downloadUrl }), { status: 200 });
     } catch (error) {
-        console.error("Error:", error.message);
-        return new Response(JSON.stringify({ error: error.message }), { status: 500 });
+        console.error("Error:", error);
+        const status = error.status || 500;
+        return new Response(JSON.stringify({ error: error.message || error.toString() }), { status: status });
     }
+}
+
+async function uploadImageToFirebase(base64Image) {
+    const fileName = Date.now() + '.png';
+    const storageRef = ref(storage, 'room-redesign/' + fileName);
+
+    await uploadString(storageRef, base64Image, 'data_url');
+    const downloadUrl = await getDownloadURL(storageRef);
+    return downloadUrl;
+}
+
+async function saveToDatabase(roomType, designType, orgImage, aiImage, userEmail) {
+    const result = await db.insert(AiGeneratedImage).values({
+        roomType: roomType,
+        designType: designType,
+        orgImage: orgImage,
+        aiImage: aiImage,
+        userEmail: userEmail
+    }).returning({ id: AiGeneratedImage.id });
+
+    return result;
 }

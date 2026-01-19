@@ -12,9 +12,9 @@ function Header() {
   const router = useRouter();
 
   return (
-    <div className="p-5 shadow-sm flex justify-between items-center bg-white">
+    <div className="sticky top-0 z-50 p-5 shadow-md flex justify-between items-center bg-white/80 backdrop-blur-md border-b border-gray-100 transition-all">
       {/* Logo */}
-      <div className="flex gap-2 items-center">
+      <div className="flex gap-2 items-center cursor-pointer" onClick={() => router.push('/dashboard')}>
         <Image
           src="/logo.svg"
           alt="Logo AI Room Design"
@@ -22,23 +22,34 @@ function Header() {
           height={40}
           priority
           title="AI Room Design Logo"
+          className="hover:scale-110 transition-transform"
         />
-        <h2 className="font-bold text-lg text-gray-700">AI Room Design</h2>
+        <h2 className="font-bold text-xl bg-gradient-to-r from-purple-600 to-indigo-600 text-transparent bg-clip-text">AI Room Design</h2>
       </div>
 
-      {/* Buy Credits Button */}
-      <Button
-        variant="ghost"
-        className="rounded-full text-primary hover:bg-gray-100 transition-all"
-        aria-label="Buy more credits"
-        onClick={() => router.push('/buy-credit')}
-      >
-        Buy More Credits
-      </Button>
+      {/* Right Section */}
+      <div className="flex gap-4 md:gap-7 items-center">
+        {/* Buy Credits Button */}
+        <Button
+          variant="ghost"
+          className="rounded-full text-gray-600 hover:text-purple-600 hover:bg-purple-50 transition-all font-medium hidden md:flex"
+          aria-label="Buy more credits"
+          onClick={() => router.push('/dashboard/buy-credits')}
+        >
+          Buy More Credits
+        </Button>
 
-      {/* User Details & Profile */}
-      <div className="flex gap-7 items-center">
-        <div className="flex gap-2 p-1 items-center bg-slate-200 px-3 rounded-full">
+        {/* My Designs Button */}
+        <Button
+          variant="ghost"
+          className="rounded-full text-gray-600 hover:text-purple-600 hover:bg-purple-50 transition-all font-medium hidden md:flex"
+          onClick={() => router.push('/dashboard/my-designs')}
+        >
+          My Designs
+        </Button>
+
+        {/* User Details & Profile */}
+        <div className="flex gap-3 items-center bg-white border border-gray-200 px-3 py-1.5 rounded-full shadow-sm">
           <Image
             src="/star.png"
             alt="Credit icon"
@@ -46,11 +57,14 @@ function Header() {
             height={20}
             title="User Credits"
           />
-          <h2 className="text-gray-700 font-medium">
+          <h2 className="text-gray-700 font-bold text-sm">
             {userDetail?.credits ?? 0}
           </h2>
         </div>
-        <UserButton />
+
+        <div className="hover:scale-105 transition-transform">
+          <UserButton />
+        </div>
       </div>
     </div>
   );
